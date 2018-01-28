@@ -35,14 +35,14 @@ NVCC_OPTS=-O3 -arch=sm_32 -Xcompiler -Wall -Xcompiler -Wextra -m64
 
 GCC_OPTS=-O3 -Wall -Wextra -m64
 
-student: main.o student_func.o compare.o reference_calc.o 
-	$(NVCC) -o HW1 main.o student_func.o compare.o reference_calc.o -L $(OPENCV_LIBPATH) $(OPENCV_LIBS) $(NVCC_OPTS)
+student: main.o rgb2grey_func.o compare.o reference_calc.o 
+	$(NVCC) -o rgb2grey main.o rgb2grey_func.o compare.o reference_calc.o -L $(OPENCV_LIBPATH) $(OPENCV_LIBS) $(NVCC_OPTS)
 
-main.o: main.cpp timer.h utils.h reference_calc.cpp compare.cpp HW1.cpp
+main.o: main.cpp timer.h utils.h reference_calc.cpp compare.cpp assist_utils.cpp
 	g++ -c main.cpp $(GCC_OPTS) -I $(CUDA_INCLUDEPATH) -I $(OPENCV_INCLUDEPATH)
 
-student_func.o: student_func.cu utils.h
-	nvcc -c student_func.cu $(NVCC_OPTS)
+rgb2grey_func.o: rgb2grey_func.cu utils.h
+	nvcc -c rgb2grey_func.cu $(NVCC_OPTS)
 
 compare.o: compare.cpp compare.h
 	g++ -c compare.cpp -I $(OPENCV_INCLUDEPATH) $(GCC_OPTS) -I $(CUDA_INCLUDEPATH)
@@ -51,4 +51,4 @@ reference_calc.o: reference_calc.cpp reference_calc.h
 	g++ -c reference_calc.cpp -I $(OPENCV_INCLUDEPATH) $(GCC_OPTS) -I $(CUDA_INCLUDEPATH)
 
 clean:
-	rm -f *.o *.png hw
+	rm -f *.o *.png hw rgb2grey

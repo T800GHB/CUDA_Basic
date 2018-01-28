@@ -8,13 +8,13 @@
 #include "reference_calc.h"
 #include "compare.h"
 
-void your_rgba_to_greyscale(const uchar4 * const h_rgbaImage, 
+void rgba_to_greyscale(const uchar4 * const h_rgbaImage, 
                             uchar4 * const d_rgbaImage,
                             unsigned char* const d_greyImage, 
                             size_t numRows, size_t numCols);
 
 //include the definitions of the above functions for this homework
-#include "HW1.cpp"
+#include "assist_utils.cpp"
 
 int main(int argc, char **argv) {
   uchar4        *h_rgbaImage, *d_rgbaImage;
@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
   GpuTimer timer;
   timer.Start();
   //call the students' code
-  your_rgba_to_greyscale(h_rgbaImage, d_rgbaImage, d_greyImage, numRows(), numCols());
+  rgba_to_greyscale(h_rgbaImage, d_rgbaImage, d_greyImage, numRows(), numCols());
   timer.Stop();
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
