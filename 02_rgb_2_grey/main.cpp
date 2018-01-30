@@ -8,8 +8,7 @@
 #include "reference_calc.h"
 #include "compare.h"
 
-void rgba_to_greyscale(const uchar4 * const h_rgbaImage, 
-                            uchar4 * const d_rgbaImage,
+void rgba_to_greyscale(uchar4 * const d_rgbaImage,
                             unsigned char* const d_greyImage, 
                             size_t numRows, size_t numCols);
 
@@ -52,7 +51,7 @@ int main(int argc, char **argv) {
       globalError   = atof(argv[5]);
 	  break;
 	default:
-      std::cerr << "Usage: ./HW1 input_file [output_filename] [reference_filename] [perPixelError] [globalError]" << std::endl;
+      std::cerr << "Usage: ./rgb2grey input_file [output_filename] [reference_filename] [perPixelError] [globalError]" << std::endl;
       exit(1);
   }
   
@@ -61,8 +60,8 @@ int main(int argc, char **argv) {
 
   GpuTimer timer;
   timer.Start();
-  //call the students' code
-  rgba_to_greyscale(h_rgbaImage, d_rgbaImage, d_greyImage, numRows(), numCols());
+  //call the rgb2grey code
+  rgba_to_greyscale(d_rgbaImage, d_greyImage, numRows(), numCols());
   timer.Stop();
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 

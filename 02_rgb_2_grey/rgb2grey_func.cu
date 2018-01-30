@@ -34,7 +34,7 @@
 #include "utils.h"
 
 __global__
-void rgba_to_greyscale(const uchar4* const rgbaImage,
+void rgb2grey_kernel(const uchar4* const rgbaImage,
                        unsigned char* const greyImage,
                        int numRows, int numCols)
 {
@@ -52,18 +52,22 @@ void rgba_to_greyscale(const uchar4* const rgbaImage,
   int index_x = blockIdx.x * blockDim.x + threadIdx.x;
   int index_y = blockIdx.y * blockDim.y + threadIdx.y;
   int grid_width = gridDim.x * blockDim.x;
+
   // Border protection
-  if (index_x < numCols && index_y < numRows){
-    //Orignal data organized as 1-dimensional array
-    int idx = index_y * numCols + index_x;
-    uchar4 rgba = rgbaImage[idx];  
-    float channel_sum = .299f * rgba.x + .587f * rgba.y + .114f * rgba.z;
-    greyImage[idx] = channel_sum; 
-  } 
+  if(index_x >= numCols || index_y >= numRows)
+    return;
+  
+  //Orignal data organized as 1-dimensional array
+  int idx = index_y * numCols + index_x;
+  uchar4 rgba = rgbaImage[idx];  
+  float channel_sum = .299f * rgba.x + .587f * rgba.y + .114f * rgba.z;
+  greyImage[idx] = channel_sum; 
+  
 }
 
-void rgba_to_greyscale(const uchar4 * const h_rgbaImage, uchar4 * const d_rgbaImage,
-                            unsigned char* const d_greyImage, size_t numRows, size_t numCols)
+void rgba_to_greyscale(uchar4 * const d_rgbaImage,
+                            unsigned char* const d_greyImage, 
+                            size_t numRows, size_t numCols)
 {
   //You must fill in the correct sizes for the blockSize and gridSize
   //currently only one block with one thread is being launched
@@ -72,7 +76,7 @@ void rgba_to_greyscale(const uchar4 * const h_rgbaImage, uchar4 * const d_rgbaIm
   //Order in dim3 : dx, dy, dz
   const dim3 gridSize( numCols / m + 1, numRows / m + 1, 1);  
   std::cout << "numRows: " <<  numRows << std::endl;
-  rgba_to_greyscale<<<gridSize, blockSize>>>(d_rgbaImage, d_greyImage, numRows, numCols);
+  rgb2grey_kernel<<<gridSize, blockSize>>>(d_rgbaImage, d_greyImage, numRows, numCols);
   
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
