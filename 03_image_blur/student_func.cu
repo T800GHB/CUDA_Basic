@@ -103,7 +103,7 @@
 #include "utils.h"
 
 __global__
-void gaussian_blur(const unsigned char* const inputChannel,
+void global_gaussian_blur(const unsigned char* const inputChannel,
                    unsigned char* const outputChannel,
                    int numRows, int numCols,
                    const float* const filter, const int filterWidth)
@@ -129,6 +129,38 @@ void gaussian_blur(const unsigned char* const inputChannel,
   // the value is out of bounds), you should explicitly clamp the neighbor values you read
   // to be within the bounds of the image. If this is not clear to you, then please refer
   // to sequential reference solution for the exact clamping semantics you should follow.
+  int index_x = blockIdx.x * blockDim.x + threadIdx.x;
+  int index_y = blockIdx.y * blockDim.y + threadIdx.y;
+  if(index_x >= numCols || index_y >= numRows)
+    return;
+  int index_abs = index_y * numCols + index_x;
+  float result = 0.f;
+  int rowBorder = numRows - 1;
+  int colBorder = numCols - 1;
+  int tmp_r = 0;
+  int tmp_c = 0;
+  for (int filter_r = -filterWidth/2; filter_r <= filterWidth/2; ++filter_r) {
+    for (int filter_c = -filterWidth/2; filter_c <= filterWidth/2; ++filter_c) {
+      //Find the global image position for this filter position
+      //clamp to boundary of the image
+      //int image_r = std::min(std::max(index_y + filter_r, 0), rowBorder);
+      tmp_r = index_y + filter_r;
+      tmp_r = tmp_r > 0 ? tmp_r : 0;
+      int image_r = tmp_r < rowBorder ? tmp_r : rowBorder;
+      
+      //int image_c = std::min(std::max(index_x + filter_c, 0), colBorder);
+      tmp_c = index_x + filter_c;
+      tmp_c = tmp_c > 0 ? tmp_c : 0;
+      int image_c = tmp_c < colBorder ? tmp_c : colBorder;
+
+      float image_value = static_cast<float>(inputChannel[image_r * numCols + image_c]);
+      float filter_value = filter[(filter_r + filterWidth/2) * filterWidth + filter_c + filterWidth/2];
+
+      result += image_value * filter_value;
+    }
+  }
+
+  outputChannel[index_abs] = static_cast<unsigned char>(result);
 }
 
 //This kernel takes in an image represented as a uchar4 and splits
@@ -156,7 +188,7 @@ void separateChannels(const uchar4* const inputImageRGBA,
   int index_y = blockIdx.y * blockDim.y + threadIdx.y;
   if(index_x >= numCols || index_y >= numRows)
     return;
-  int index_abs = index_y * numCols + index;
+  int index_abs = index_y * numCols + index_x;
   uchar4 rgba = inputImageRGBA[index_abs];
   redChannel[index_abs] = rgba.x;
   greenChannel[index_abs] = rgba.y;
@@ -225,7 +257,7 @@ void allocateMemoryAndCopyToGPU(const size_t numRowsImage, const size_t numColsI
 
 }
 
-void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_inputImageRGBA,
+void your_gaussian_blur(uchar4 * const d_inputImageRGBA,
                         uchar4* const d_outputImageRGBA, const size_t numRows, const size_t numCols,
                         unsigned char *d_redBlurred, 
                         unsigned char *d_greenBlurred, 
@@ -243,12 +275,20 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
 
 
   //TODO: Launch a kernel for separating the RGBA image into different color channels
+  separateChannels<<<gridSize, blockSize>>>(d_inputImageRGBA, numRows, numCols,
+                                          d_red, d_green, d_blue);
 
   // Call cudaDeviceSynchronize(), then call checkCudaErrors() immediately after
   // launching your kernel to make sure that you didn't make any mistakes.
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
   //TODO: Call your convolution kernel here 3 times, once for each color channel.
+  global_gaussian_blur<<<gridSize, blockSize>>>(d_red, d_redBlurred, numRows, numCols,
+                                  d_filter, filterWidth);
+  global_gaussian_blur<<<gridSize, blockSize>>>(d_green, d_greenBlurred, numRows, numCols,
+                                  d_filter, filterWidth);
+  global_gaussian_blur<<<gridSize, blockSize>>>(d_blue, d_blueBlurred, numRows, numCols,
+                                  d_filter, filterWidth);
 
   // Again, call cudaDeviceSynchronize(), then call checkCudaErrors() immediately after
   // launching your kernel to make sure that you didn't make any mistakes.
@@ -275,4 +315,5 @@ void cleanup() {
   checkCudaErrors(cudaFree(d_red));
   checkCudaErrors(cudaFree(d_green));
   checkCudaErrors(cudaFree(d_blue));
+  checkCudaErrors(cudaFree(d_filter));
 }
