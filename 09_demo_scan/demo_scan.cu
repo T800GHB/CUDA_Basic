@@ -1,21 +1,25 @@
 #include <iostream>
 #include <numeric>
 #include <stdlib.h>
-
 #include <stdio.h>
 
 /*
-The logic in the two kernel is correct, but when you apply on a large array.
-Apply on a small array will generate correct result.
+Somethings so confuse me, why i can't get same correct result every time.
+*/
+
+/*
+These two kernel could be used on large array, but slow
+Best advice: use __syncthreads() before you want to use different index
 */
 __global__ void hillis_steele_scan_forward(float * d_out, float * d_in, const int array_size){
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
-	d_out[idx] = d_in[idx];
+	d_out[idx] = d_in[idx];	
 	for(int step = 1; step < array_size; step *= 2){		
 		if(idx + step >= array_size) return;
 		__syncthreads();
-		d_out[idx + step] = d_out[idx] + d_out[idx + step];
+		float in1 = d_out[idx];
 		__syncthreads();
+		d_out[idx + step] += in1;
 	}
 }
 
@@ -32,26 +36,47 @@ __global__ void hillis_steele_scan_backward(float * d_out, float * d_in){
 }
 
 /*
-I don't know how to understand the index in this kernle.
-This kernel will generate correct result, when the input array is large
-But this kernel will output incorrect result, when the input array is small.
+These two kernel could be used on small array, but fast
 */
-__global__ void work_inefficient_scan_kernel(float *X, float *Y, int InputSize) {
-	extern __shared__ float XY[];
-	int i = blockIdx.x*blockDim.x + threadIdx.x;
-	if (i < InputSize) {
-	XY[threadIdx.x] = X[i];
+__global__ void shared_hillis_steele_scan_forward(float *d_out, float *d_in, const int array_size) {
+	extern __shared__ float sdata[];
+	int idx = threadIdx.x;
+	if(idx < array_size) {
+		sdata[idx] = d_in[idx];
+	} else {
+		return;
+	}	// the code below performs iterative scan on XY
+	for(int step = 1; step < array_size; step *= 2){		
+		if(idx + step >= array_size) return;
+		__syncthreads();
+		float in1 = sdata[idx];
+		__syncthreads();
+		sdata[idx + step] += in1;
 	}
-	// the code below performs iterative scan on XY
-	for (unsigned int stride = 1; stride <= threadIdx.x; stride *= 2) {
-	__syncthreads();
-	XY[threadIdx.x] += XY[threadIdx.x-stride];
+	d_out[idx] = sdata[idx];
+}
+
+__global__ void shared_hillis_steele_scan_backward(float * d_out, float * d_in, const int array_size){
+	extern __shared__ float sdata[];
+	int idx = threadIdx.x;
+	if(idx < array_size) {
+		sdata[idx] = d_in[idx];
+	} else {
+		return;
 	}
-	Y[i] = XY[threadIdx.x];
+	sdata[idx] = d_in[idx];
+	for(int step = 1; step <= idx; step *= 2){		
+		if(idx - step < 0) return;
+		__syncthreads();
+		float in1 = sdata[idx - step];
+		__syncthreads();
+		sdata[idx] += in1;
+	}
+	d_out[idx] = sdata[idx];
 }
 
 int main(int argc, char ** argv) {
-	const int ARRAY_SIZE = 230;
+	const int ARRAY_SIZE = 1025;
 	const int ARRAY_BYTES = ARRAY_SIZE * sizeof(float);
 	const int maxThreadPerBlock = 512;
 	const int numBlock = ARRAY_SIZE / maxThreadPerBlock + 1;
@@ -74,9 +99,10 @@ int main(int argc, char ** argv) {
 	cudaMemcpy(d_in, h_in, ARRAY_BYTES, cudaMemcpyHostToDevice);
 
 	// launch the kernel
-	hillis_steele_scan_forward<<<numBlock, maxThreadPerBlock>>>(d_out, d_in, ARRAY_SIZE);
+	//hillis_steele_scan_forward<<<numBlock, maxThreadPerBlock>>>(d_out, d_in, ARRAY_SIZE);
 	//hillis_steele_scan_backward<<<numBlock, maxThreadPerBlock>>>(d_out, d_in);
-	//work_inefficient_scan_kernel<<<numBlock, maxThreadPerBlock, maxThreadPerBlock * sizeof(float)>>>(d_out, d_in, ARRAY_SIZE);
+	//shared_hillis_steele_scan_forward<<<numBlock, maxThreadPerBlock, maxThreadPerBlock  * sizeof(float)>>>(d_out, d_in, ARRAY_SIZE);
+	shared_hillis_steele_scan_backward<<<numBlock, maxThreadPerBlock, maxThreadPerBlock  * sizeof(float)>>>(d_out, d_in, ARRAY_SIZE);
 
 	// copy back the result array to the CPU
 	cudaMemcpy(h_out, d_out, ARRAY_BYTES, cudaMemcpyDeviceToHost);
